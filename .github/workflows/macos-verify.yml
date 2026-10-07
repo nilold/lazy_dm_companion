@@ -1,0 +1,31 @@
+name: macos-verify
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [combat_tracker, map_display]
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run dist:mac
+      - run: ls -la release
+      - name: Smoke-launch arm64 app
+        run: |
+          APP=$(ls -d release/mac-arm64/*.app | head -1)
+          codesign -dv "$APP" 2>&1 || true
+          "$APP/Contents/MacOS/$(basename "$APP" .app)" & PID=$!
+          sleep 15
+          kill -0 $PID && echo "app still running after 15s" && kill $PID
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-dmg
+          path: ${{ matrix.app }}/release/*.dmg
